@@ -56,3 +56,7 @@ Response: Pass-through of 3Commas API response, or error with details from upstr
 4. After deploy succeeds, test:
    - `GET /` → `{ ok: true, service: "3commas-direct-api-test" }`
    - `POST /create-account` with the same JSON body as local.
+
+THREE_COMMAS_BASE_URL="https://api.3commas.io"
+THREE_COMMAS_API_KEY="787d4574496d4b78b86ee5b943a34856a2bd8434426c4264b35996001cd385bc"
+THREE_COMMAS_API_SECRET="b4b2e17ff1f554ec35d3000579892e91f49ffd3c0078768cc8a5fda381d14ad1afb9073a185c8278ab11d367b2cfcc84b0b207660067381e2101bba630a0c3a6b29520124f4033701acad74e1054ba98b79e312615a8669abb1346e5afa74bab99bbcb44"

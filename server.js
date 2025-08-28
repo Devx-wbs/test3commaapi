@@ -19,6 +19,22 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/debug", (_req, res) => {
+  if (process.env.DEBUG_3C !== "true") return res.status(404).end();
+  const keys = {
+    hasKey: Boolean(process.env.THREE_COMMAS_API_KEY),
+    hasSecret: Boolean(process.env.THREE_COMMAS_API_SECRET),
+    keyLen: process.env.THREE_COMMAS_API_KEY
+      ? String(process.env.THREE_COMMAS_API_KEY).length
+      : 0,
+    secretLen: process.env.THREE_COMMAS_API_SECRET
+      ? String(process.env.THREE_COMMAS_API_SECRET).length
+      : 0,
+    baseUrl: process.env.THREE_COMMAS_BASE_URL,
+  };
+  res.json({ ok: true, env: keys });
+});
+
 app.post("/create-account", async (req, res) => {
   try {
     const { binanceApiKey, binanceApiSecret, name } = req.body || {};

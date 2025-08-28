@@ -1,6 +1,19 @@
 const axios = require("axios");
 const crypto = require("crypto");
 
+function sanitizeEnv(value) {
+  if (typeof value !== "string") return value;
+  // Trim whitespace and surrounding single/double quotes if user pasted with quotes
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 function buildFormBody(params) {
   const entries = Object.entries(params)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -19,8 +32,8 @@ function signRequest(path, bodyString, secret) {
 }
 
 async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
-  const apiKey = process.env.THREE_COMMAS_API_KEY;
-  const apiSecret = process.env.THREE_COMMAS_API_SECRET;
+  const apiKey = sanitizeEnv(process.env.THREE_COMMAS_API_KEY);
+  const apiSecret = sanitizeEnv(process.env.THREE_COMMAS_API_SECRET);
 
   if (!apiKey || !apiSecret) {
     throw new Error(
@@ -28,7 +41,8 @@ async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
     );
   }
 
-  const baseUrl = process.env.THREE_COMMAS_BASE_URL || "https://api.3commas.io";
+  const baseUrl =
+    sanitizeEnv(process.env.THREE_COMMAS_BASE_URL) || "https://api.3commas.io";
   const path = "/public/api/ver1/accounts/new";
 
   const payload = {
@@ -46,11 +60,44 @@ async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
     APIKEY: apiKey,
     Signature: signature,
     "Content-Type": "application/x-www-form-urlencoded",
+    "User-Agent": "3c-direct-test/1.0",
   };
 
   const url = `${baseUrl}${path}`;
 
-  const response = await axios.post(url, bodyString, { headers });
+  if (process.env.DEBUG_3C === "true") {
+    const safeHeaders = {
+      ...headers,
+      APIKEY: apiKey ? `len:${apiKey.length}` : undefined,
+      Signature: signature ? `len:${signature.length}` : undefined,
+    };
+    // eslint-disable-next-line no-console
+    console.log("3C Request:", {
+      url,
+      path,
+      headerKeys: Object.keys(headers),
+      headers: safeHeaders,
+    });
+  }
+
+  const response = await axios.post(url, bodyString, {
+    headers,
+    validateStatus: () => true,
+  });
+
+  if (process.env.DEBUG_3C === "true") {
+    // eslint-disable-next-line no-console
+    console.log("3C Response:", {
+      status: response.status,
+      data: response.data,
+    });
+  }
+
+  if (response.status >= 400) {
+    const err = new Error(`3Commas error ${response.status}`);
+    err.response = response;
+    throw err;
+  }
   return response.data;
 }
 
