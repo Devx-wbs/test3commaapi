@@ -19,6 +19,25 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+// Returns server's current public IP (for allowlisting). DEBUG_3C must be true.
+app.get("/my-ip", async (_req, res) => {
+  if (process.env.DEBUG_3C !== "true") return res.status(404).end();
+  try {
+    const axios = require("axios");
+    const [ipify, ifconfig] = await Promise.all([
+      axios
+        .get("https://api.ipify.org?format=json", { timeout: 5000 })
+        .catch(() => ({ data: null })),
+      axios
+        .get("https://ifconfig.me/ip", { timeout: 5000 })
+        .catch(() => ({ data: null })),
+    ]);
+    res.json({ ok: true, ipify: ipify.data, ifconfig: ifconfig.data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/debug", (_req, res) => {
   if (process.env.DEBUG_3C !== "true") return res.status(404).end();
   const keys = {
