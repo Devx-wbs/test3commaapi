@@ -64,3 +64,20 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
 });
+
+// Debug route to inspect signing (no call to 3Commas). Only when DEBUG_3C=true
+app.post("/debug-sign", (req, res) => {
+  if (process.env.DEBUG_3C !== "true") return res.status(404).end();
+  try {
+    const { binanceApiKey, binanceApiSecret, name } = req.body || {};
+    const data = require("./src/threeCommasService")._debugBuild({
+      binanceApiKey,
+      binanceApiSecret,
+      name,
+    });
+    // Do not expose raw API key; only lengths
+    res.json({ ok: true, data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});

@@ -103,4 +103,44 @@ async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
 
 module.exports = {
   createBinanceAccount,
+  // Debug helpers (no external call)
+  _debugBuild({ binanceApiKey, binanceApiSecret, name }) {
+    const apiKey = sanitizeEnv(process.env.THREE_COMMAS_API_KEY);
+    const apiSecret = sanitizeEnv(process.env.THREE_COMMAS_API_SECRET);
+    const baseUrl =
+      sanitizeEnv(process.env.THREE_COMMAS_BASE_URL) ||
+      "https://api.3commas.io";
+    const path = "/public/api/ver1/accounts/new";
+
+    const payload = {
+      type: "binance",
+      name: name || "New account",
+      api_key: binanceApiKey,
+      secret: binanceApiSecret,
+      "types_to_create[]": "binance",
+    };
+
+    const bodyString = buildFormBody(payload);
+    const signature = signRequest(path, bodyString, apiSecret || "");
+    const headers = {
+      APIKEY: apiKey,
+      Signature: signature,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "3c-direct-test/1.0",
+    };
+
+    return {
+      url: `${baseUrl}${path}`,
+      path,
+      payload,
+      sortedKeys: Object.keys(payload).sort(),
+      bodyString,
+      signature,
+      headerKeys: Object.keys(headers),
+      headerLens: {
+        APIKEY: headers.APIKEY ? headers.APIKEY.length : 0,
+        Signature: headers.Signature ? headers.Signature.length : 0,
+      },
+    };
+  },
 };
