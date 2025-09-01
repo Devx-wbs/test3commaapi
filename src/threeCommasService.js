@@ -43,7 +43,7 @@ async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
 
   const baseUrl =
     sanitizeEnv(process.env.THREE_COMMAS_BASE_URL) || "https://api.3commas.io";
-  const path = "/public/api/ver1/accounts";
+  const path = "/public/api/ver1/accounts/new";
 
   const payload = {
     type: "binance",
@@ -110,7 +110,7 @@ module.exports = {
     const baseUrl =
       sanitizeEnv(process.env.THREE_COMMAS_BASE_URL) ||
       "https://api.3commas.io";
-    const path = "/public/api/ver1/accounts";
+    const path = "/public/api/ver1/accounts/new";
 
     const payload = {
       type: "binance",
