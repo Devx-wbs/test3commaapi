@@ -98,6 +98,21 @@ async function createBinanceAccount({ binanceApiKey, binanceApiSecret, name }) {
     err.response = response;
     throw err;
   }
+
+  // Check if response contains account ID
+  if (process.env.DEBUG_3C === "true") {
+    console.log("3C Success Response:", {
+      status: response.status,
+      data: response.data,
+      hasAccountId: Boolean(response.data?.id || response.data?.account_id),
+    });
+  }
+
+  // Validate response has account ID
+  if (!response.data?.id && !response.data?.account_id) {
+    throw new Error("3Commas did not return an account id and lookup failed");
+  }
+
   return response.data;
 }
 
