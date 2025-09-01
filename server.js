@@ -100,3 +100,17 @@ app.post("/debug-sign", (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// Debug route to show exact URL being called
+app.get("/debug-url", (req, res) => {
+  if (process.env.DEBUG_3C !== "true") return res.status(404).end();
+  const baseUrl = process.env.THREE_COMMAS_BASE_URL || "https://api.3commas.io";
+  const path = "/public/api/ver1/accounts/new";
+  res.json({
+    ok: true,
+    fullUrl: `${baseUrl}${path}`,
+    baseUrl,
+    path,
+    expectedBy3Commas: "https://api.3commas.io/public/api/ver1/accounts/new",
+  });
+});
