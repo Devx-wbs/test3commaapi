@@ -76,6 +76,11 @@ app.post("/create-account", async (req, res) => {
       const createdAccountId = result?.id || result?.account_id;
       if (userId && createdAccountId) {
         userStore.saveMapping(String(userId), String(createdAccountId));
+        userStore.setBinanceCreds(
+          String(userId),
+          String(binanceApiKey),
+          String(binanceApiSecret)
+        );
       }
     } catch (_e) {
       // ignore persistence errors
@@ -100,6 +105,62 @@ app.get("/users/:userId/wallet", async (req, res) => {
 
     const data = await threeCommasService.getAccountBalances(accountId);
     res.status(200).json({ ok: true, userId, accountId, data });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Upstream error", details });
+  }
+});
+
+// Binance direct: get balances via REST
+app.get("/users/:userId/binance/wallet", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const creds = userStore.getBinanceCreds(String(userId));
+    if (!creds)
+      return res.status(404).json({ error: "No Binance creds for userId" });
+    const data = await threeCommasService.binanceGetAccountInfo(creds);
+    res.status(200).json({ ok: true, userId, data });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Upstream error", details });
+  }
+});
+
+// Binance direct: create listenKey for WSS user stream
+app.post("/users/:userId/binance/listen-key", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const creds = userStore.getBinanceCreds(String(userId));
+    if (!creds)
+      return res.status(404).json({ error: "No Binance creds for userId" });
+    const data = await threeCommasService.binanceCreateListenKey({
+      apiKey: creds.apiKey,
+    });
+    res.status(200).json({ ok: true, userId, ...data });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Upstream error", details });
+  }
+});
+
+// Binance direct: keep alive listenKey
+app.post("/users/:userId/binance/listen-key/keepalive", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { listenKey } = req.body || {};
+    const creds = userStore.getBinanceCreds(String(userId));
+    if (!creds)
+      return res.status(404).json({ error: "No Binance creds for userId" });
+    if (!listenKey)
+      return res.status(400).json({ error: "listenKey required" });
+    const data = await threeCommasService.binanceKeepAliveListenKey({
+      apiKey: creds.apiKey,
+      listenKey,
+    });
+    res.status(200).json({ ok: true, userId, data });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };

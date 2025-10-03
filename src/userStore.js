@@ -34,13 +34,29 @@ module.exports = {
   saveMapping(userId, accountId) {
     if (!userId || !accountId) return;
     const all = readAll();
-    all[String(userId)] = String(accountId);
+    const id = String(userId);
+    const prev = all[id] || {};
+    all[id] = { ...prev, threeCommasAccountId: String(accountId) };
     writeAll(all);
   },
   getAccountId(userId) {
     if (!userId) return undefined;
     const all = readAll();
-    return all[String(userId)];
+    const entry = all[String(userId)];
+    return entry && entry.threeCommasAccountId;
+  },
+  setBinanceCreds(userId, apiKey, apiSecret) {
+    if (!userId || !apiKey || !apiSecret) return;
+    const all = readAll();
+    const id = String(userId);
+    const prev = all[id] || {};
+    all[id] = { ...prev, binance: { apiKey, apiSecret } };
+    writeAll(all);
+  },
+  getBinanceCreds(userId) {
+    if (!userId) return undefined;
+    const all = readAll();
+    return all[String(userId)]?.binance;
   },
   getAllMappings() {
     return readAll();
