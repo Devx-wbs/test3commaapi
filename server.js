@@ -121,25 +121,21 @@ app.get("/users/:userId/wallet/summary", async (req, res) => {
     }
 
     const acct = await threeCommasService.getAccountBalances(accountId);
+    const detailed = await threeCommasService.getAccountAssetBalances(
+      accountId
+    );
 
-    let assets = [];
-    if (Array.isArray(acct?.balances)) {
-      assets = acct.balances
-        .filter((b) => Number(b?.balance || b?.amount || 0) > 0)
-        .map((b) => ({
-          asset: b.currency || b.asset || b.symbol,
-          balance: String(b.balance ?? b.amount ?? 0),
-          valueUsd: b.usd_value ?? b.usdAmount ?? b.usd_value_amount,
-        }));
-    } else if (Array.isArray(acct?.currencies)) {
-      assets = acct.currencies
-        .filter((c) => Number(c?.amount || 0) > 0)
-        .map((c) => ({
-          asset: c.code || c.currency || c.asset,
-          balance: String(c.amount),
-          valueUsd: c.usd_value ?? c.usdAmount,
-        }));
-    }
+    const assets = (
+      Array.isArray(detailed)
+        ? detailed
+        : detailed?.balances || detailed?.currencies || []
+    )
+      .map((b) => ({
+        asset: b.currency || b.asset || b.symbol || b.code,
+        balance: String(b.balance ?? b.amount ?? b.free ?? 0),
+        valueUsd: b.usd_value ?? b.usdAmount ?? b.usd_value_amount ?? b.usd,
+      }))
+      .filter((a) => a.asset && Number(a.balance) > 0);
 
     const fallback = {
       totalBtc: acct?.btc_amount,
