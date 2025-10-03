@@ -160,8 +160,8 @@ module.exports = {
       });
     }
 
-    const response = await axios.get(url, {
-      headers,
+    const response = await axios.post(url, null, {
+      headers: { ...headers, "Content-Type": "application/json" },
       validateStatus: () => true,
     });
 
