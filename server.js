@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const threeCommasService = require("./src/threeCommasService");
+const userStore = require("./src/userStore");
 
 dotenv.config();
 
@@ -56,7 +57,7 @@ app.get("/debug", (_req, res) => {
 
 app.post("/create-account", async (req, res) => {
   try {
-    const { binanceApiKey, binanceApiSecret, name } = req.body || {};
+    const { binanceApiKey, binanceApiSecret, name, userId } = req.body || {};
     if (!binanceApiKey || !binanceApiSecret) {
       return res
         .status(400)
@@ -71,11 +72,38 @@ app.post("/create-account", async (req, res) => {
       name: accountName,
     });
 
+    try {
+      const createdAccountId = result?.id || result?.account_id;
+      if (userId && createdAccountId) {
+        userStore.saveMapping(String(userId), String(createdAccountId));
+      }
+    } catch (_e) {
+      // ignore persistence errors
+    }
+
     res.status(200).json(result);
   } catch (error) {
     const status = error?.response?.status || 500;
     const data = error?.response?.data || { message: error.message };
     res.status(status).json({ error: "Upstream error", details: data });
+  }
+});
+
+// Fetch wallet/balances for a given userId
+app.get("/users/:userId/wallet", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const accountId = userStore.getAccountId(String(userId));
+    if (!accountId) {
+      return res.status(404).json({ error: "No account mapped for userId" });
+    }
+
+    const data = await threeCommasService.getAccountBalances(accountId);
+    res.status(200).json({ ok: true, userId, accountId, data });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Upstream error", details });
   }
 });
 
