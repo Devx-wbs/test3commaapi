@@ -173,6 +173,34 @@ module.exports = {
 
     return response.data;
   },
+  // Binance direct helpers
+  async binanceGetAccountInfo({
+    apiKey,
+    apiSecret,
+    baseUrl = "https://api.binance.com",
+  }) {
+    if (!apiKey || !apiSecret) throw new Error("Missing Binance credentials");
+    const timestamp = Date.now();
+    const recvWindow = 5000;
+    const params = new URLSearchParams({
+      timestamp: String(timestamp),
+      recvWindow: String(recvWindow),
+    });
+    const query = params.toString();
+    const signature = crypto
+      .createHmac("sha256", apiSecret)
+      .update(query)
+      .digest("hex");
+    const url = `${baseUrl}/api/v3/account?${query}&signature=${signature}`;
+    const headers = { "X-MBX-APIKEY": apiKey };
+    const res = await axios.get(url, { headers, validateStatus: () => true });
+    if (res.status >= 400) {
+      const err = new Error(`Binance error ${res.status}`);
+      err.response = res;
+      throw err;
+    }
+    return res.data;
+  },
   async listAccounts(params = {}) {
     const apiKey = sanitizeEnv(process.env.THREE_COMMAS_API_KEY);
     const apiSecret = sanitizeEnv(process.env.THREE_COMMAS_API_SECRET);

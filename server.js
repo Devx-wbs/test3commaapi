@@ -75,7 +75,11 @@ app.post("/create-account", async (req, res) => {
     try {
       const createdAccountId = result?.id || result?.account_id;
       if (userId && createdAccountId) {
-        userStore.saveMapping(String(userId), String(createdAccountId));
+        userStore.saveMapping(String(userId), {
+          accountId: String(createdAccountId),
+          binanceApiKey,
+          binanceApiSecret,
+        });
       }
     } catch (_e) {
       // ignore persistence errors
@@ -100,6 +104,38 @@ app.get("/users/:userId/wallet", async (req, res) => {
 
     const data = await threeCommasService.getAccountBalances(accountId);
     res.status(200).json({ ok: true, userId, accountId, data });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Upstream error", details });
+  }
+});
+
+// Minimal wallet summary: list assets with balance and USD value via Binance
+app.get("/users/:userId/wallet/summary", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const record = userStore.getUserRecord(String(userId));
+    if (!record?.binanceApiKey || !record?.binanceApiSecret) {
+      return res
+        .status(404)
+        .json({ error: "No Binance credentials stored for userId" });
+    }
+
+    const acct = await threeCommasService.binanceGetAccountInfo({
+      apiKey: record.binanceApiKey,
+      apiSecret: record.binanceApiSecret,
+    });
+
+    const balances = (acct?.balances || [])
+      .filter((b) => Number(b.free) > 0 || Number(b.locked) > 0)
+      .map((b) => ({
+        asset: b.asset,
+        balance: String(Number(b.free) + Number(b.locked)),
+      }));
+
+    // Return without USD valuation to avoid extra pricing calls; client can price or we can add later
+    res.status(200).json({ ok: true, userId, assets: balances });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };

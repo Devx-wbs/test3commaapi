@@ -31,13 +31,23 @@ function writeAll(data) {
 }
 
 module.exports = {
-  saveMapping(userId, accountId) {
-    if (!userId || !accountId) return;
+  saveMapping(userId, data) {
+    if (!userId) return;
     const all = readAll();
-    all[String(userId)] = String(accountId);
+    all[String(userId)] = {
+      accountId: data?.accountId ? String(data.accountId) : undefined,
+      binanceApiKey: data?.binanceApiKey,
+      binanceApiSecret: data?.binanceApiSecret,
+    };
     writeAll(all);
   },
   getAccountId(userId) {
+    if (!userId) return undefined;
+    const all = readAll();
+    const rec = all[String(userId)];
+    return typeof rec === "string" ? rec : rec?.accountId;
+  },
+  getUserRecord(userId) {
     if (!userId) return undefined;
     const all = readAll();
     return all[String(userId)];
