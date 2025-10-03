@@ -111,31 +111,42 @@ app.get("/users/:userId/wallet", async (req, res) => {
   }
 });
 
-// Minimal wallet summary: list assets with balance and USD value via Binance
+// Minimal wallet summary: list assets with balance and USD value via 3Commas only
 app.get("/users/:userId/wallet/summary", async (req, res) => {
   try {
     const { userId } = req.params;
-    const record = userStore.getUserRecord(String(userId));
-    if (!record?.binanceApiKey || !record?.binanceApiSecret) {
-      return res
-        .status(404)
-        .json({ error: "No Binance credentials stored for userId" });
+    const accountId = userStore.getAccountId(String(userId));
+    if (!accountId) {
+      return res.status(404).json({ error: "No account mapped for userId" });
     }
 
-    const acct = await threeCommasService.binanceGetAccountInfo({
-      apiKey: record.binanceApiKey,
-      apiSecret: record.binanceApiSecret,
-    });
+    const acct = await threeCommasService.getAccountBalances(accountId);
 
-    const balances = (acct?.balances || [])
-      .filter((b) => Number(b.free) > 0 || Number(b.locked) > 0)
-      .map((b) => ({
-        asset: b.asset,
-        balance: String(Number(b.free) + Number(b.locked)),
-      }));
+    let assets = [];
+    if (Array.isArray(acct?.balances)) {
+      assets = acct.balances
+        .filter((b) => Number(b?.balance || b?.amount || 0) > 0)
+        .map((b) => ({
+          asset: b.currency || b.asset || b.symbol,
+          balance: String(b.balance ?? b.amount ?? 0),
+          valueUsd: b.usd_value ?? b.usdAmount ?? b.usd_value_amount,
+        }));
+    } else if (Array.isArray(acct?.currencies)) {
+      assets = acct.currencies
+        .filter((c) => Number(c?.amount || 0) > 0)
+        .map((c) => ({
+          asset: c.code || c.currency || c.asset,
+          balance: String(c.amount),
+          valueUsd: c.usd_value ?? c.usdAmount,
+        }));
+    }
 
-    // Return without USD valuation to avoid extra pricing calls; client can price or we can add later
-    res.status(200).json({ ok: true, userId, assets: balances });
+    const fallback = {
+      totalBtc: acct?.btc_amount,
+      totalUsd: acct?.usd_amount,
+    };
+
+    res.status(200).json({ ok: true, userId, accountId, assets, fallback });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };
