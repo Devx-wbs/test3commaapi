@@ -132,7 +132,7 @@ module.exports = {
       "https://api.3commas.io";
     const path = `/public/api/ver1/accounts/${encodeURIComponent(
       String(accountId)
-    )}/account_info`;
+    )}`;
 
     const queryString = ""; // none
     const signature = signRequest(path, queryString, apiSecret);
