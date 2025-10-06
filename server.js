@@ -39,6 +39,74 @@ app.get("/my-ip", async (_req, res) => {
   }
 });
 
+// Binance User Data Stream (WSS) helpers
+app.post("/users/:userId/binance/listen-key", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const record = userStore.getUserRecord(String(userId));
+    if (!record?.binanceApiKey) {
+      return res.status(404).json({ error: "No Binance API key for userId" });
+    }
+    const { listenKey } = await threeCommasService.binanceCreateListenKey({
+      apiKey: record.binanceApiKey,
+    });
+    userStore.setListenKey(String(userId), listenKey);
+    res
+      .status(200)
+      .json({
+        ok: true,
+        listenKey,
+        wss: `wss://stream.binance.com:9443/ws/${listenKey}`,
+      });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Binance error", details });
+  }
+});
+
+app.put("/users/:userId/binance/listen-key", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const record = userStore.getUserRecord(String(userId));
+    const listenKey = record?.listenKey;
+    if (!record?.binanceApiKey || !listenKey) {
+      return res.status(404).json({ error: "Missing API key or listenKey" });
+    }
+    await threeCommasService.binanceKeepAliveListenKey({
+      apiKey: record.binanceApiKey,
+      listenKey,
+    });
+    userStore.setListenKey(String(userId), listenKey);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Binance error", details });
+  }
+});
+
+app.delete("/users/:userId/binance/listen-key", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const record = userStore.getUserRecord(String(userId));
+    const listenKey = record?.listenKey;
+    if (!record?.binanceApiKey || !listenKey) {
+      return res.status(404).json({ error: "Missing API key or listenKey" });
+    }
+    await threeCommasService.binanceCloseListenKey({
+      apiKey: record.binanceApiKey,
+      listenKey,
+    });
+    userStore.clearListenKey(String(userId));
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    const status = error?.response?.status || 500;
+    const details = error?.response?.data || { message: error.message };
+    res.status(status).json({ ok: false, error: "Binance error", details });
+  }
+});
+
 app.get("/debug", (_req, res) => {
   if (process.env.DEBUG_3C !== "true") return res.status(404).end();
   const keys = {
@@ -111,38 +179,31 @@ app.get("/users/:userId/wallet", async (req, res) => {
   }
 });
 
-// Minimal wallet summary: list assets with balance and USD value via 3Commas only
+// Minimal wallet summary: list assets with balance and USD value via Binance
 app.get("/users/:userId/wallet/summary", async (req, res) => {
   try {
     const { userId } = req.params;
-    const accountId = userStore.getAccountId(String(userId));
-    if (!accountId) {
-      return res.status(404).json({ error: "No account mapped for userId" });
+    const record = userStore.getUserRecord(String(userId));
+    if (!record?.binanceApiKey || !record?.binanceApiSecret) {
+      return res
+        .status(404)
+        .json({ error: "No Binance credentials stored for userId" });
     }
 
-    const acct = await threeCommasService.getAccountBalances(accountId);
-    const detailed = await threeCommasService.getAccountAssetBalances(
-      accountId
-    );
+    const acct = await threeCommasService.binanceGetAccountInfo({
+      apiKey: record.binanceApiKey,
+      apiSecret: record.binanceApiSecret,
+    });
 
-    const assets = (
-      Array.isArray(detailed)
-        ? detailed
-        : detailed?.balances || detailed?.currencies || []
-    )
+    const balances = (acct?.balances || [])
+      .filter((b) => Number(b.free) > 0 || Number(b.locked) > 0)
       .map((b) => ({
-        asset: b.currency || b.asset || b.symbol || b.code,
-        balance: String(b.balance ?? b.amount ?? b.free ?? 0),
-        valueUsd: b.usd_value ?? b.usdAmount ?? b.usd_value_amount ?? b.usd,
-      }))
-      .filter((a) => a.asset && Number(a.balance) > 0);
+        asset: b.asset,
+        balance: String(Number(b.free) + Number(b.locked)),
+      }));
 
-    const fallback = {
-      totalBtc: acct?.btc_amount,
-      totalUsd: acct?.usd_amount,
-    };
-
-    res.status(200).json({ ok: true, userId, accountId, assets, fallback });
+    // Return without USD valuation to avoid extra pricing calls; client can price or we can add later
+    res.status(200).json({ ok: true, userId, assets: balances });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };

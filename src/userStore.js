@@ -38,6 +38,8 @@ module.exports = {
       accountId: data?.accountId ? String(data.accountId) : undefined,
       binanceApiKey: data?.binanceApiKey,
       binanceApiSecret: data?.binanceApiSecret,
+      listenKey: data?.listenKey,
+      listenKeyUpdatedAt: data?.listenKeyUpdatedAt,
     };
     writeAll(all);
   },
@@ -51,6 +53,29 @@ module.exports = {
     if (!userId) return undefined;
     const all = readAll();
     return all[String(userId)];
+  },
+  setListenKey(userId, listenKey) {
+    if (!userId) return;
+    const all = readAll();
+    const rec = all[String(userId)] || {};
+    rec.listenKey = listenKey;
+    rec.listenKeyUpdatedAt = Date.now();
+    all[String(userId)] = rec;
+    writeAll(all);
+  },
+  getListenKey(userId) {
+    const rec = this.getUserRecord(userId);
+    return rec?.listenKey;
+  },
+  clearListenKey(userId) {
+    const all = readAll();
+    const rec = all[String(userId)];
+    if (rec) {
+      delete rec.listenKey;
+      delete rec.listenKeyUpdatedAt;
+      all[String(userId)] = rec;
+      writeAll(all);
+    }
   },
   getAllMappings() {
     return readAll();
