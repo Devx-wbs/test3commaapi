@@ -1,7 +1,8 @@
 const WebSocket = require("ws");
 const cache = require("./cache");
 
-const BASE_WSS = process.env.BINANCE_WSS_BASE || "wss://stream.binance.com:9443";
+const BASE_WSS =
+  process.env.BINANCE_WSS_BASE || "wss://stream.binance.com:9443";
 
 let ws = null;
 let connected = false;
@@ -16,7 +17,8 @@ function buildCombinedUrl() {
 function connect() {
   if (connecting || connected) return;
   connecting = true;
-  const url = wantStreams.size > 0 ? buildCombinedUrl() : `${BASE_WSS}/ws/heartbeat`;
+  const url =
+    wantStreams.size > 0 ? buildCombinedUrl() : `${BASE_WSS}/ws/heartbeat`;
   ws = new WebSocket(url);
 
   ws.on("open", () => {
@@ -57,7 +59,9 @@ function handleMessage(payload, stream) {
 }
 
 function normalizeSymbol(sym) {
-  return String(sym || "").trim().toUpperCase();
+  return String(sym || "")
+    .trim()
+    .toUpperCase();
 }
 
 function streamNameForSymbol(symbol) {
@@ -77,7 +81,9 @@ module.exports = {
     if (connected) {
       try {
         const params = list.map((s) => streamNameForSymbol(s));
-        ws.send(JSON.stringify({ method: "SUBSCRIBE", params, id: Date.now() }));
+        ws.send(
+          JSON.stringify({ method: "SUBSCRIBE", params, id: Date.now() })
+        );
       } catch (_e) {}
     } else {
       connect();
@@ -91,7 +97,9 @@ module.exports = {
     if (connected) {
       try {
         const params = list.map((s) => streamNameForSymbol(s));
-        ws.send(JSON.stringify({ method: "UNSUBSCRIBE", params, id: Date.now() }));
+        ws.send(
+          JSON.stringify({ method: "UNSUBSCRIBE", params, id: Date.now() })
+        );
       } catch (_e) {}
     }
   },
@@ -100,5 +108,3 @@ module.exports = {
     return cache.getCachedPrice(sym);
   },
 };
-
-
