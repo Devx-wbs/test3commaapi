@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const threeCommasService = require("./src/threeCommasService");
 const userStore = require("./src/userStore");
+const marketWs = require("./src/marketWs");
 
 dotenv.config();
 
@@ -51,13 +52,11 @@ app.post("/users/:userId/binance/listen-key", async (req, res) => {
       apiKey: record.binanceApiKey,
     });
     userStore.setListenKey(String(userId), listenKey);
-    res
-      .status(200)
-      .json({
-        ok: true,
-        listenKey,
-        wss: `wss://stream.binance.com:9443/ws/${listenKey}`,
-      });
+    res.status(200).json({
+      ok: true,
+      listenKey,
+      wss: `wss://stream.binance.com:9443/ws/${listenKey}`,
+    });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };
@@ -179,7 +178,7 @@ app.get("/users/:userId/wallet", async (req, res) => {
   }
 });
 
-// Minimal wallet summary: list assets with balance and USD value via Binance
+// Minimal wallet summary: list assets with balance and USD value via Binance (with caching)
 app.get("/users/:userId/wallet/summary", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -202,8 +201,37 @@ app.get("/users/:userId/wallet/summary", async (req, res) => {
         balance: String(Number(b.free) + Number(b.locked)),
       }));
 
-    // Return without USD valuation to avoid extra pricing calls; client can price or we can add later
-    res.status(200).json({ ok: true, userId, assets: balances });
+    // Build price symbols list (e.g., BTCUSDT)
+    const symbols = balances
+      .filter((a) => a.asset && a.asset !== "USDT")
+      .map((a) => `${a.asset}USDT`);
+    // Subscribe to WS market streams and use WS-cached prices only (no REST)
+    if (symbols.length > 0) {
+      marketWs.ensureConnected();
+      marketWs.subscribeSymbols(symbols);
+    }
+    const priceMap = {};
+    for (const sym of symbols) {
+      const px = marketWs.getPrice(sym);
+      if (px !== undefined) priceMap[sym] = px;
+    }
+
+    const assets = balances.map((a) => {
+      if (a.asset === "USDT") {
+        return {
+          asset: a.asset,
+          balance: a.balance,
+          valueUsd: Number(a.balance),
+        };
+      }
+      const sym = `${a.asset}USDT`;
+      const px = priceMap[sym];
+      const balNum = Number(a.balance);
+      const valueUsd = px ? balNum * Number(px) : undefined;
+      return { asset: a.asset, balance: a.balance, valueUsd };
+    });
+
+    res.status(200).json({ ok: true, userId, assets });
   } catch (error) {
     const status = error?.response?.status || 500;
     const details = error?.response?.data || { message: error.message };

@@ -1,5 +1,6 @@
 const axios = require("axios");
 const crypto = require("crypto");
+const cache = require("./cache");
 
 function sanitizeEnv(value) {
   if (typeof value !== "string") return value;
@@ -195,11 +196,55 @@ module.exports = {
     const headers = { "X-MBX-APIKEY": apiKey };
     const res = await axios.get(url, { headers, validateStatus: () => true });
     if (res.status >= 400) {
+      if (res.status === 418 || res.data?.code === -1003) {
+        // IP banned or rate-limit; record cooldown if provided
+        const until =
+          Number(res.headers["x-mbx-used-weight-1m-ban-until"]) || 0;
+        cache.setBinanceBanUntil(until || Date.now() + 60_000);
+      }
       const err = new Error(`Binance error ${res.status}`);
       err.response = res;
       throw err;
     }
     return res.data;
+  },
+  async binanceBatchPrices(
+    symbols,
+    { baseUrl = "https://api.binance.com" } = {}
+  ) {
+    if (!Array.isArray(symbols) || symbols.length === 0) return {};
+    const fresh = {};
+    const toFetch = [];
+    for (const sym of symbols) {
+      const cached = cache.getCachedPrice(sym, 30000);
+      if (cached !== undefined) {
+        fresh[sym] = cached;
+      } else {
+        toFetch.push(sym);
+      }
+    }
+    if (toFetch.length === 0) return fresh;
+    if (cache.isBinanceBannedNow()) return fresh; // avoid calls during ban
+    try {
+      const encoded = encodeURIComponent(JSON.stringify(toFetch));
+      const url = `${baseUrl}/api/v3/ticker/price?symbols=${encoded}`;
+      const res = await axios.get(url, { validateStatus: () => true });
+      if (res.status >= 400) {
+        if (res.status === 418 || res.data?.code === -1003) {
+          cache.setBinanceBanUntil(Date.now() + 60_000);
+        }
+        return fresh;
+      }
+      for (const row of res.data || []) {
+        if (row?.symbol && row?.price) {
+          cache.setCachedPrice(row.symbol, Number(row.price));
+          fresh[row.symbol] = Number(row.price);
+        }
+      }
+      return fresh;
+    } catch (_e) {
+      return fresh;
+    }
   },
   async binanceCreateListenKey({
     apiKey,
